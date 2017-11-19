@@ -1,0 +1,84 @@
+---
+title: "Classification of Barbell Lifting"
+author: "Erik White"
+date: "November 19, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+"Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset)." - <https://www.coursera.org/learn/practical-machine-learning/peer/R43St/prediction-assignment-writeup>
+
+## Objective
+
+We will attempt to implement a machine learning model that will utilize various measurements captured in the above study to predict the classification of how a particular barbell lift was performed. Each observation was classified into on one of five categories, stored within the 'classe' variable of the datasets that we will be utilizing. 
+
+* Class A - "exactly according to the specification" aka the correct implementation of the exercise 
+* Class B - "throwing the elbows to the front" 
+* Class C - "lifting the dumbbell only halfway" 
+* Class D - "lowering the dumbbell only halfway" 
+* Class E - "throwing the hips to the front" 
+
+## Pre-processing
+
+We begin by loading the datasets and exploring some of the features:
+
+```{r loadData, cache = TRUE}
+wltrain <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings = c("NA", "#DIV/0", ""))
+wlvalid <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", na.strings = c("NA", "#DIV/0", ""))
+str(wltrain)
+```
+
+An initial review of the training set suggests that there are a material number of missing values throughout our dataset. Further analysis confirms this:
+
+```{r NAplot}
+natrain <- colSums(is.na(wltrain))/nrow(wltrain)
+natest <- colSums(is.na(wlvalid))/nrow(wlvalid)
+plot(natrain, main = "Missing Values", xlab = "Column Index", ylab = "% of missing values", type = "n")
+points(natrain, pch = 17, cex = .5, col = "dark red")
+```
+
+There's a significant population of columns that have over 97% of their values missing. We choose to remove these columns from our data sets. All remaining columns do not have any missing values.
+
+```{r removeNA}
+wltrain <- wltrain[,names(which(natrain<.97))]
+wlvalid <- wlvalid[,names(which(natest<.97))]
+```
+
+We can also note that there are a number of columns that are not directly related to the execution of the exercises. We choose to remove these from our model as they could potentially introduce unwanted bias into our model.
+
+```{r dropCols}
+drop <- c("X", "user_name","raw_timestamp_part_1", "raw_timestamp_part_2","cvtd_timestamp","new_window","num_window")
+wltrain <- wltrain[,!names(wltrain) %in% drop]
+wlvalid <- wlvalid[,!names(wlvalid) %in% drop]
+```
+
+## Cross Validation
+
+In order to evaluate the performance of our model, we choose to cross validate by splitting the 'wltrain' data into a training and a testing dataset. We will keep the 'wlvalid' dataset off to the side to use as a validation dataset once we have finalized our model.
+
+```{r crossValid}
+library(caret)
+set.seed(123)
+inTrain <- createDataPartition(wltrain$classe, p=.75, list = FALSE)
+training <-  wltrain[inTrain,]
+testing <- wltrain[-inTrain,]
+```
+
+## Model Selection
+
+We choose to implement a random forest algorithm for our prediction model. We then create a confusion matrix between the 
+
+```{r modelBuild}
+library(randomForest)
+set.seed(456)
+RFmodel <- randomForest(classe ~ ., data = training)
+RFprediction <- predict(RFmodel, testing)
+confusionMatrix(RFprediction, testing$classe)
+```
+
+When applied to our testing dataset, our model is 99.51% accurate. This suggests an expected out-of-sample error rate of .49%.
